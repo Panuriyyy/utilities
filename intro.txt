@@ -1,0 +1,613 @@
+принудительное создание связи в бд
+
+-- 1. Временно отключаем проверку существующих данных
+ALTER TABLE [dbo].[Soderganie_zakaza] NOCHECK CONSTRAINT ALL;
+
+-- 2. Создаём внешний ключ с NOCHECK (без проверки старых данных)
+ALTER TABLE [dbo].[Soderganie_zakaza] 
+WITH NOCHECK 
+ADD CONSTRAINT [FK_Soderganie_zakaza_Tovarr] 
+FOREIGN KEY ([id_tovara]) REFERENCES [dbo].[Tovarr] ([id_tovara]);
+
+-- 3. Включаем проверку обратно (новые данные будут проверяться)
+ALTER TABLE [dbo].[Soderganie_zakaza] CHECK CONSTRAINT [FK_Soderganie_zakaza_Tovarr];
+
+узнать в бд -- Имя сервера и базы данных одной строкой
+SELECT @@SERVERNAME AS ServerName, DB_NAME() AS DatabaseName;
+
+================================================================================
+  ИНСТРУКЦИЯ: КАК ПЕРЕДЕЛАТЬ ПРОЕКТ savegad ПОД ДРУГУЮ ПРЕДМЕТНУЮ ОБЛАСТЬ
+================================================================================
+
+Проект: savegad (ASP.NET Core + SQL Server)
+Функционал остаётся тем же: вход, роли, товары, заказы, фильтры, CRUD.
+Меняются: данные, тексты, цвета, картинки.
+
+
+--------------------------------------------------------------------------------
+ШАГ 0. СКОПИРОВАТЬ ПРОЕКТ
+--------------------------------------------------------------------------------
+
+1. Скопируйте папку savegad в новую, например savegad-apteka.
+2. Откройте новую папку в Visual Studio, VS Code или Cursor.
+3. Дальше работайте только в копии.
+
+
+--------------------------------------------------------------------------------
+ШАГ 0.1. УСТАНОВКА СРЕДЫ И БИБЛИОТЕК (ТЕРМИНАЛ)
+--------------------------------------------------------------------------------
+
+Проект использует: .NET 8, ASP.NET Core, Entity Framework Core, SQL Server.
+
+--- A) Проверить, установлен ли .NET 8 SDK ---
+
+Откройте PowerShell или CMD и выполните:
+
+  dotnet --version
+
+Должно показать 8.x.x (например 8.0.100).
+Если команда не найдена или версия ниже 8 — установите SDK:
+
+  winget install Microsoft.DotNet.SDK.8
+
+После установки закройте и снова откройте терминал, снова проверьте:
+
+  dotnet --version
+
+
+--- B) Перейти в папку проекта ---
+
+  cd "ПУТЬ\К\ПРОЕКТУ\savegad"
+
+Пример:
+
+  cd "e:\Новая папка\спаси  и сохрани\ЗАДАНИЕ ДЭ\готово\еще раз\savegad"
+
+
+--- C) Установить ВСЕ библиотеки проекта одной командой (РЕКОМЕНДУЕТСЯ) ---
+
+В папке проекта уже есть файл savegad.csproj со списком пакетов.
+Достаточно выполнить:
+
+  dotnet restore
+
+Эта команда скачает все нужные NuGet-пакеты:
+  - Microsoft.EntityFrameworkCore.SqlServer  (работа с SQL Server)
+  - Microsoft.EntityFrameworkCore.Design     (миграции, дизайн БД)
+  - Microsoft.EntityFrameworkCore.Tools      (инструменты EF)
+  - Microsoft.AspNetCore.Session             (сессии, авторизация)
+  - System.Drawing.Common                    (обработка фото товаров)
+
+Затем проверьте сборку:
+
+  dotnet build
+
+Если «Сборка успешно завершена» и «Ошибок: 0» — библиотеки установлены правильно.
+
+
+--- D) Запуск приложения ---
+
+  dotnet run
+
+Или через скрипт (если порт занят — освободит автоматически):
+
+  powershell -NoProfile -ExecutionPolicy Bypass -File .vscode\start.ps1
+
+Сайт откроется: http://localhost:5191
+
+
+--- E) Если dotnet restore не помог — установить пакеты вручную ---
+
+Выполните по очереди в папке проекта:
+
+  dotnet add package Microsoft.EntityFrameworkCore.SqlServer --version 8.0.0
+  dotnet add package Microsoft.EntityFrameworkCore.Design --version 8.0.0
+  dotnet add package Microsoft.EntityFrameworkCore.Tools --version 8.0.0
+  dotnet add package Microsoft.AspNetCore.Session --version 2.2.0
+  dotnet add package System.Drawing.Common --version 8.0.0
+
+Потом снова:
+
+  dotnet restore
+  dotnet build
+
+
+--- F) SQL Server (база данных) ---
+
+Приложение подключается к SQL Server. На ПК должен быть установлен
+SQL Server или SQL Server Express.
+
+Проверка (если установлен sqlcmd):
+
+  sqlcmd -S ИМЯ_СЕРВЕРА -E -Q "SELECT 1"
+
+Имя сервера укажите в appsettings.json (сейчас: Server=Honurij).
+
+Установка SQL Server Express (если нет):
+
+  winget install Microsoft.SQLServer.2019.Express
+
+
+--- G) Частые ошибки в терминале ---
+
+  Ошибка: dotnet не является командой
+  → Установите .NET 8 SDK (см. пункт A)
+
+  Ошибка: address already in use (порт 5191 занят)
+  → powershell -File .vscode\start.ps1
+  или:
+  Get-NetTCPConnection -LocalPort 5191 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+  Ошибка при dotnet build: файл заблокирован
+  → Закройте запущенное приложение (Ctrl+C в терминале) и снова dotnet build
+
+  Ошибка подключения к БД
+  → Проверьте SQL Server запущен и строка в appsettings.json верная
+
+
+--- H) Краткая шпаргалка (скопировать целиком) ---
+
+  cd "ПУТЬ\К\savegad"
+  dotnet restore
+  dotnet build
+  dotnet run
+
+
+--------------------------------------------------------------------------------
+ШАГ 0.2. РАСШИРЕНИЯ ДЛЯ VISUAL STUDIO / VS CODE
+--------------------------------------------------------------------------------
+
+Проект: ASP.NET Core 8 + C# + Razor + SQL Server.
+
+
+=== VISUAL STUDIO 2022 (рекомендуется для экзамена) ===
+
+При установке Visual Studio выберите рабочую нагрузку:
+  «Разработка ASP.NET и веб-приложений»
+
+Дополнительно в установщике отметьте:
+  - .NET 8.0 Runtime
+  - SQL Server Express LocalDB (для локальной БД, по желанию)
+
+Открытие проекта:
+  Файл → Открыть → Проект/решение → выберите savegad.csproj
+
+Запуск:
+  F5  (с отладкой)
+  Ctrl+F5  (без отладки)
+
+Дополнительные компоненты (если спросит):
+  - Microsoft.Entity Framework Core Tools
+
+
+=== VS CODE / CURSOR ===
+
+Обязательные расширения:
+
+  1. C# Dev Kit                    (ms-dotnettools.csdevkit)
+     — запуск, отладка, IntelliSense для C#
+
+  2. C#                            (ms-dotnettools.csharp)
+     — подсветка C#, базовая поддержка (ставится с Dev Kit)
+
+Полезные расширения:
+
+  3. SQL Server (mssql)            (ms-mssql.mssql)
+     — просмотр БД, выполнение SQL-запросов
+
+  4. NuGet Package Manager         (jmrog.vscode-nuget-package-manager)
+     — управление пакетами через интерфейс
+
+  5. PowerShell                    (ms-vscode.powershell)
+     — удобная работа с терминалом PowerShell
+
+Установка через терминал (VS Code):
+
+  code --install-extension ms-dotnettools.csdevkit
+  code --install-extension ms-dotnettools.csharp
+  code --install-extension ms-mssql.mssql
+  code --install-extension ms-vscode.powershell
+
+Запуск в VS Code / Cursor:
+  1. Открыть папку savegad
+  2. Run and Debug (Ctrl+Shift+D)
+  3. Выбрать: savegad: dotnet run
+  4. F5
+
+Если F5 не работает без C# Dev Kit — запускайте через терминал:
+  powershell -File .vscode\start.ps1
+
+
+--------------------------------------------------------------------------------
+ШАГ 0.3. КОМАНДЫ POWERSHELL ДЛЯ РАБОТЫ С ПРОЕКТОМ
+--------------------------------------------------------------------------------
+
+Все команды выполняются в PowerShell.
+Сначала перейдите в папку проекта:
+
+  cd "ПУТЬ\К\savegad"
+
+
+--- НАВИГАЦИЯ И ПРОСМОТР ФАЙЛОВ ---
+
+  cd "путь\к\папке"          перейти в папку
+  cd ..                      на уровень выше
+  dir                        список файлов в папке
+  dir -Recurse *.cs          найти все .cs файлы
+  cls                        очистить экран
+  pwd                        показать текущую папку (Get-Location)
+
+
+--- УСТАНОВКА И СБОРКА ПРОЕКТА ---
+
+  dotnet --version           проверить версию .NET
+  dotnet restore             скачать все библиотеки (NuGet)
+  dotnet build               собрать проект
+  dotnet run                 запустить сайт
+  dotnet clean               очистить сборку (папки bin/obj)
+  dotnet build --no-restore  собрать без повторной загрузки пакетов
+
+
+--- ЗАПУСК И ОСТАНОВКА САЙТА ---
+
+  dotnet run
+  → сайт: http://localhost:5191
+  → остановка: Ctrl+C в терминале
+
+  powershell -NoProfile -ExecutionPolicy Bypass -File .vscode\start.ps1
+  → запуск с автоматическим освобождением порта 5191
+
+  Остановить приложение, если порт занят:
+
+  Get-NetTCPConnection -LocalPort 5191 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+
+--- РАБОТА С БАЗОЙ ДАННЫХ (SQL Server) ---
+
+  sqlcmd -S ИМЯ_СЕРВЕРА -E -Q "SELECT 1"
+  → проверка подключения к SQL Server
+
+  sqlcmd -S Honurij -d user09 -E -Q "SELECT * FROM Tovarr"
+  → просмотр товаров (подставьте свой сервер и БД)
+
+  sqlcmd -S Honurij -d user09 -E -Q "SELECT id_roli, Name FROM Roli_user"
+  → просмотр ролей
+
+  sqlcmd -S Honurij -d user09 -E -Q "SELECT TOP 5 * FROM [Заказ_import]"
+  → просмотр заказов
+
+Строка подключения в appsettings.json:
+  Server=Honurij;Database=user09;Trusted_Connection=True;TrustServerCertificate=True;
+
+
+--- ПОИСК ТЕКСТА В ПРОЕКТЕ ---
+
+  Select-String -Path "Controllers\*.cs" -Pattern "товар"
+  → найти слово «товар» в контроллерах
+
+  Select-String -Path "Views" -Pattern "Наименование" -Recurse
+  → найти текст в представлениях
+
+
+--- УПАКОВКА ПРОЕКТА В ZIP (для transfer.sh) ---
+
+  cd "ПУТЬ\К\savegad"
+
+  $temp = "$env:TEMP\savegad_pack"
+  Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Path $temp | Out-Null
+  Get-ChildItem -Exclude bin,obj,.vs | Copy-Item -Destination $temp -Recurse -Force
+
+  $zipPath = "ПУТЬ\savegad.zip"
+  Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+  Compress-Archive -Path "$temp\*" -DestinationPath $zipPath -Force
+  Remove-Item $temp -Recurse -Force
+  Write-Host "Готово: $zipPath"
+
+
+--- ЗАГРУЗКА НА transfer.sh ---
+
+  curl.exe --upload-file "ПУТЬ\savegad.zip" https://transfer.sh/savegad.zip
+
+  → в ответе будет ссылка, например:
+    https://transfer.sh/abc123/savegad.zip
+  → скопируйте и сохраните (живёт ~14 дней)
+
+
+--- СКАЧИВАНИЕ НА ДРУГОМ ПК ---
+
+  curl.exe -L -o savegad.zip "https://transfer.sh/ССЫЛКА/savegad.zip"
+  Expand-Archive -Path savegad.zip -DestinationPath savegad -Force
+  cd savegad
+  dotnet restore
+  dotnet build
+  dotnet run
+
+
+--- УСТАНОВКА ПО (если нет на новом ПК) ---
+
+  winget install Microsoft.DotNet.SDK.8
+  winget install Microsoft.SQLServer.2019.Express
+  winget install Microsoft.VisualStudio.2022.Community
+
+
+--- ЕЖЕДНЕВНАЯ ШПАРГАЛКА (копировать) ---
+
+  cd "ПУТЬ\К\savegad"
+  dotnet restore
+  dotnet build
+  dotnet run
+
+  Остановить: Ctrl+C
+  Сайт: http://localhost:5191
+
+  Если порт занят:
+  Get-NetTCPConnection -LocalPort 5191 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+
+--- ТЕСТОВЫЕ УЧЁТНЫЕ ЗАПИСИ (вариант В7) ---
+
+  Администратор: 94d5ous@gmail.com  / uzWC67
+  Менеджер:      1diph5e@tutanota.com / 8ntwUp
+  Клиент:        5d4zbu@tutanota.com  / rwVDh9
+  Гость:         кнопка «Войти как гость» на форме входа
+
+
+--------------------------------------------------------------------------------
+ШАГ 1. БАЗА ДАННЫХ
+--------------------------------------------------------------------------------
+
+1.1. Создайте новую БД со структурой:
+
+  Таблица                  | Назначение
+  -------------------------|--------------------------------------------
+  user_import              | пользователи (логин, пароль, ФИО, роль)
+  Roli_user                | роли (админ, менеджер, клиент)
+  Tovarr                   | основные записи (товары)
+  Kategoria_tovarov        | категории
+  Postavshiki              | поставщики
+  Proizvoditel             | производители
+  Заказ_import             | заказы
+  Soderganie_zakaza        | состав заказа
+  Status_zakaza            | статусы заказов
+  Пункты выдачи_import     | адреса пунктов выдачи
+
+1.2. Загрузите import-данные из ресурсов задания.
+
+1.3. Подключите БД в файле appsettings.json:
+
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=ИМЯ_СЕРВЕРА;Database=ИМЯ_НОВОЙ_БД;Trusted_Connection=True;TrustServerCertificate=True;"
+  }
+
+1.4. Если имена таблиц/полей другие — правьте Models/:
+
+  Файл                  | Что менять
+  ----------------------|---------------------------
+  Tovar.cs              | [Table("...")], поля
+  Zakaz.cs              | таблица заказов
+  User.cs               | пользователи
+  KategoriaTovarov.cs   | категории
+  Postavshik.cs         | поставщики
+  Proizvoditel.cs       | производители
+
+Если структура та же, как в варианте В7 — шаг можно пропустить.
+
+
+--------------------------------------------------------------------------------
+ШАГ 2. РОЛИ ПОЛЬЗОВАТЕЛЕЙ
+--------------------------------------------------------------------------------
+
+Файл: Helpers/RoleHelper.cs
+
+Проверьте роли в БД:
+  SELECT id_roli, Name FROM Roli_user
+
+Подставьте в RoleHelper.cs:
+
+  public const string Admin = "Название_админа";       // сейчас: Pikeshop
+  public const string Manager = "Менеджер";
+  public const string Client = "Авторизированный клиент";
+
+  public const int AdminRoleId = 1;    // id из Roli_user
+  public const int ManagerRoleId = 2;
+  public const int ClientRoleId = 3;
+
+ВАЖНО: AdminRoleId, ManagerRoleId, ClientRoleId должны совпадать с id_roli в БД.
+
+
+--------------------------------------------------------------------------------
+ШАГ 3. ТЕКСТЫ И ПРЕДМЕТНАЯ ОБЛАСТЬ (Views)
+--------------------------------------------------------------------------------
+
+3.1. Главная форма (вход)
+  Файл: Views/Account/Login.cshtml
+  - <title> — заголовок вкладки
+  - <h2> — заголовок на форме
+  - логотип через ViewBag.LogoUrl
+
+3.2. Шапка сайта
+  Файл: Views/Shared/_Layout.cshtml
+  - логотип: ViewBag.LogoUrl
+  - иконка: ViewBag.IconUrl
+  - заголовок вкладки: @ViewData["Title"]
+
+3.3. Список товаров
+  Файл: Views/Products/Index.cshtml
+
+  Примеры замены заголовков колонок:
+
+  Было (игрушки)  | Книги              | Аптека
+  ----------------|--------------------|-----------------------
+  Наименование    | Название книги     | Название препарата
+  Категория       | Жанр               | Категория
+  Производитель   | Издательство       | Производитель
+  Поставщик       | Поставщик          | Поставщик
+  На складе       | На складе          | На складе
+  Скидка          | Скидка             | Скидка
+
+  Также поменяйте:
+  - ViewData["Title"] — например "Список книг"
+  - кнопку "Добавить товар" — например "Добавить книгу"
+
+3.4. Формы товара
+  Файлы:
+  - Views/Products/Create.cshtml
+  - Views/Products/Edit.cshtml
+  Поменяйте подписи полей (<label>).
+
+3.5. Заказы
+  Файлы:
+  - Views/Orders/Index.cshtml
+  - Views/Orders/Create.cshtml
+  - Views/Orders/Edit.cshtml
+  Поменяйте: Заказы, Артикул, Статус заказа, Дата выдачи и т.д.
+
+
+--------------------------------------------------------------------------------
+ШАГ 4. ЦВЕТА САЙТА
+--------------------------------------------------------------------------------
+
+Один файл: wwwroot/css/site.css
+
+В начале файла:
+
+  :root {
+      --color-main-bg: #FFFFFF;        /* основной фон */
+      --color-additional-bg: #F5DEB3;  /* шапка, панели, заголовки */
+      --color-accent: #DEB887;         /* кнопки действий */
+      --color-discount-bg: #FFDEAD;    /* скидка > 17% */
+      --color-text: #000000;           /* текст */
+  }
+
+Примеры палитр:
+
+  Книжный магазин:
+    --color-additional-bg: #E8EEF4;
+    --color-accent: #4A6FA5;
+    --color-discount-bg: #FFF3CD;
+
+  Аптека:
+    --color-additional-bg: #E8F5E9;
+    --color-accent: #66BB6A;
+    --color-discount-bg: #FFF9C4;
+
+  Автозапчасти:
+    --color-additional-bg: #EEEEEE;
+    --color-accent: #FF9800;
+    --color-discount-bg: #FFE0B2;
+
+Сохранили → перезапустили приложение → цвета обновятся везде.
+
+
+--------------------------------------------------------------------------------
+ШАГ 5. ШРИФТ
+--------------------------------------------------------------------------------
+
+Файл: wwwroot/css/site.css
+
+Сейчас:
+  font-family: Arial, sans-serif !important;
+
+Примеры замены:
+  font-family: Segoe UI, sans-serif !important;
+  font-family: Verdana, sans-serif !important;
+  font-family: Times New Roman, serif !important;
+
+
+--------------------------------------------------------------------------------
+ШАГ 6. ЛОГОТИП, ИКОНКА И ФОТО
+--------------------------------------------------------------------------------
+
+Папка: wwwroot/images/
+
+  Файл              | Назначение
+  ------------------|----------------------------------
+  icon.ico/icon.jpg | иконка вкладки браузера
+  icon.jpg/logo.png | логотип на входе и в шапке
+  picture.png       | заглушка без фото
+  1.JPG ... 10.JPG  | фото товаров
+
+Правило: в БД поле Фото = "1.jpg" → в images должен быть файл 1.JPG.
+Просто замените файлы — код подхватит сам (Helpers/ImagePathHelper.cs).
+
+
+--------------------------------------------------------------------------------
+ШАГ 7. СООБЩЕНИЯ В КОНТРОЛЛЕРАХ (по желанию)
+--------------------------------------------------------------------------------
+
+  Controllers/ProductsController.cs — "Товар успешно добавлен"
+  Controllers/OrdersController.cs   — "Заказ успешно удалён"
+  Controllers/AccountController.cs  — "Неверный логин или пароль"
+
+Ищите Ctrl+Shift+F по слову "товар" и заменяйте.
+
+
+--------------------------------------------------------------------------------
+ШАГ 8. ЗАПУСК И ПРОВЕРКА
+--------------------------------------------------------------------------------
+
+Запуск (Visual Studio):
+  1. Открыть savegad.csproj
+  2. F5 или Ctrl+F5
+  3. http://localhost:5191
+
+Запуск (VS Code / Cursor):
+  1. Run and Debug → savegad: dotnet run
+  2. F5
+  3. http://localhost:5191
+
+Запуск (PowerShell):
+  dotnet run
+  или: powershell -File .vscode\start.ps1
+
+Чеклист:
+  [ ] Окно входа с логотипом
+  [ ] Вход: админ, менеджер, клиент, гость
+  [ ] Список товаров с колонками и фото
+  [ ] Подсветка скидки > 17% (фон #FFDEAD)
+  [ ] Поиск и фильтр (менеджер/админ)
+  [ ] CRUD товаров (админ)
+  [ ] Список заказов (менеджер/админ)
+  [ ] CRUD заказов (админ)
+  [ ] Цвета и шрифт по стилю
+
+
+--------------------------------------------------------------------------------
+ЧТО НЕ ТРОГАТЬ (если функционал тот же)
+--------------------------------------------------------------------------------
+
+  Program.cs                  — маршруты, сессии
+  Data/ApplicationDbContext.cs — подключение к БД
+  Controllers/*.cs            — логика (если БД та же)
+  Helpers/ImagePathHelper.cs  — пути к картинкам
+  Helpers/ImageHelper.cs      — загрузка фото
+  .vscode/launch.json         — запуск из VS Code / Cursor
+
+
+--------------------------------------------------------------------------------
+КРАТКАЯ СХЕМА (порядок работы)
+--------------------------------------------------------------------------------
+
+  0. Терминал: dotnet restore → dotnet build → dotnet run
+  1. appsettings.json       → новая БД
+  2. wwwroot/css/site.css   → цвета + шрифт
+  3. wwwroot/images/        → логотип, иконка, фото
+  4. Views/*.cshtml         → названия колонок и заголовков
+  5. Helpers/RoleHelper.cs  → роли (если другие в БД)
+  6. Models/*.cs            → только если другие таблицы в БД
+
+
+--------------------------------------------------------------------------------
+ПРИМЕР: ИГРУШКИ → КНИГИ ЗА 30 МИНУТ
+--------------------------------------------------------------------------------
+
+  1. Скопировать проект → savegad-books
+  2. Подключить БД с книгами в appsettings.json
+  3. В site.css поставить синюю палитру
+  4. В Views/Products/Index.cshtml:
+     "товар" → "книга", "категория" → "жанр", "производитель" → "издательство"
+  5. Положить в images/ новый логотип и 1.JPG–10.JPG
+  6. dotnet run → проверить
+
+================================================================================

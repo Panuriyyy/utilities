@@ -1,0 +1,206 @@
+Шаг 1 — Включить сессию в Program.cs
+Найдите в Program.cs строки с builder.Services.Add... и добавьте:
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+Потом найдите app.UseRouting() или app.MapControllerRoute(...) и перед ними добавьте:
+app.UseSession();
+
+Шаг 2 — Создать фильтр проверки ролей
+Создайте новую папку Filters в корне проекта. В ней файл RoleFilterAttribute.cs:
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+
+namespace ВашПроект.Filters
+{
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+    public class RoleFilterAttribute : ActionFilterAttribute
+    {
+        private readonly string[] _roles;
+
+        public RoleFilterAttribute(params string[] roles)
+        {
+            _roles = roles;
+        }
+
+        public override void OnActionExecuting(ActionExecutingContext context)
+        {
+            var role = context.HttpContext.Session.GetString("UserRole");
+
+            if (role == null || (_roles.Length > 0 && !_roles.Contains(role)))
+            {
+                context.Result = new RedirectToRouteResult(
+                    new RouteValueDictionary {
+                        { "controller", "Auth" },
+                        { "action", "Login" }
+                    }
+                );
+            }
+
+            base.OnActionExecuting(context);
+        }
+    }
+}
+
+Шаг 3 — Создать AuthController.cs
+В папке Controllers создайте файл AuthController.cs:
+
+using Microsoft.AspNetCore.Mvc;
+using ВашПроект.Data; // замените на ваш namespace с DbContext
+
+public class AuthController : Controller
+{
+    private readonly ApplicationDbContext _db;
+
+    public AuthController(ApplicationDbContext db)
+    {
+        _db = db;
+    }
+
+    // Страница входа
+    [HttpGet]
+    public IActionResult Login()
+    {
+        // Если уже вошли — сразу перенаправляем
+        if (HttpContext.Session.GetString("UserRole") != null)
+            return RedirectToAction("Index", "Products");
+
+        return View();
+    }
+
+    // Обработка формы входа
+    [HttpPost]
+    public IActionResult Login(string login, string password)
+    {
+        var user = _db.Users.FirstOrDefault(
+            u => u.Login == login && u.Password == password
+        );
+
+        if (user == null)
+        {
+            ViewBag.Error = "Неверный логин или пароль";
+            return View();
+        }
+
+        // Сохраняем данные в сессию
+        HttpContext.Session.SetString("UserName", user.FullName);
+        HttpContext.Session.SetString("UserRole", user.Role);
+        HttpContext.Session.SetInt32("UserId", user.Id);
+
+        // Перенаправляем по роли
+        return user.Role switch
+        {
+            "admin"   => RedirectToAction("Index", "Products"),
+            "manager" => RedirectToAction("Index", "Products"),
+            "client"  => RedirectToAction("Index", "Products"),
+            _         => RedirectToAction("Login")
+        };
+    }
+
+    // Войти как гость
+    public IActionResult Guest()
+    {
+        HttpContext.Session.SetString("UserRole", "guest");
+        HttpContext.Session.SetString("UserName", "Гость");
+        return RedirectToAction("Index", "Products");
+    }
+
+    // Выход
+    public IActionResult Logout()
+    {
+        HttpContext.Session.Clear();
+        return RedirectToAction("Login");
+    }
+}
+
+Замените Users, Login, Password, FullName, Role, Id на реальные имена полей вашей таблицы пользователей.
+
+Шаг 4 — Создать представление Views/Auth/Login.cshtml
+
+@{
+    ViewBag.Title = "Вход в систему";
+}
+
+<div style="max-width:400px; margin:100px auto; font-family:Arial;">
+    <h2>Вход в систему</h2>
+
+    <form method="post">
+        <div>
+            <label>Логин</label>
+
+            <input type="text" name="login" style="width:100%; padding:8px;" />
+        </div>
+        
+
+        <div>
+            <label>Пароль</label>
+
+            <input type="password" name="password" style="width:100%; padding:8px;" />
+        </div>
+        
+
+
+        ViewBag.Error != null
+        {
+            <p style="color:red;">@ViewBag.Error</p>
+        }
+
+        <button type="submit" style="width:100%; padding:10px; background:#DEB887; border:none; cursor:pointer;">
+            Войти
+        </button>
+    </form>
+
+    <hr/>
+    <a href="/Auth/Guest" style="display:block; text-align:center; margin-top:10px;">
+        Войти как гость (без регистрации)
+    </a>
+</div>
+
+Шаг 5 — Защитить контроллеры по ролям
+В верхней части каждого контроллера добавьте атрибут [RoleFilter(...)]:
+
+using ВашПроект.Filters;
+
+// Товары — видят все авторизованные + гости
+[RoleFilter("admin", "manager", "client", "guest")]
+public class ProductsController : Controller { ... }
+
+// Заказы — только менеджер и администратор
+[RoleFilter("admin", "manager")]
+public class OrdersController : Controller { ... }
+
+Не забудьте подключить using ВашПроект.Filters; в начале каждого файла контроллера.
+
+Шаг 6 — Показать ФИО и кнопку выхода в _Layout.cshtml
+В верхней части _Layout.cshtml добавьте:
+
+@id684945479 (@using) Microsoft.AspNetCore.Http
+
+@{
+    var userName = Context.Session.GetString("UserName");
+    var userRole = Context.Session.GetString("UserRole");
+}
+
+Там же, в шапке навигации (правый верхний угол):
+
+<div style="float:right; padding:10px; font-family:Arial;">
+    userName != null
+    {
+        <span>@userName</span>
+        &nbsp;|&nbsp;
+        <a href="/Auth/Logout">Выйти</a>
+    }
+</div>
+
+Шаг 7 — Сделать Login страницей по умолчанию
+В Program.cs найдите app.MapControllerRoute(...) и измените:
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Auth}/{action=Login}/{id?}");
+

