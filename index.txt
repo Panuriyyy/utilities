@@ -1,0 +1,1244 @@
+Создайте новый проект ASP.NET Core MVC. Для этого откройте Visual Studio, выберите создать новый проект, выберите шаблон ASP.NET Core Web App (Model-View-Controller). Укажите имя проекта, например, ExamApp. Убедитесь, что выбрана платформа .NET 8.0, а аутентификация настроена на без аутентификации (None). Нажмите создать.
+
+После создания проекта удалите все файлы в папках Controllers, Views, Models, кроме HomeController.cs и папки Home внутри Views, а также файла _Layout.cshtml в папке Shared. Это нужно, чтобы начать с чистого листа.
+
+Теперь установите пакеты Entity Framework Core. Откройте консоль диспетчера пакетов: Инструменты -> Диспетчер пакетов NuGet -> Консоль диспетчера пакетов. Выполните команды:
+Install-Package Microsoft.EntityFrameworkCore.SqlServer
+Install-Package Microsoft.EntityFrameworkCore.Tools
+Install-Package Microsoft.EntityFrameworkCore.Design
+
+Все пакеты должны быть одной версии, например, 8.0.0. Если у вас уже установлены другие версии, укажите версию через параметр -Version.
+
+Откройте файл appsettings.json. Внутри фигурных скобок добавьте раздел ConnectionStrings. Пример:
+"ConnectionStrings": {
+  "DefaultConnection": "Server=.\\SQLEXPRESS;Database=ExamDB;Trusted_Connection=True;TrustServerCertificate=True;"
+}
+Замените ExamDB на имя вашей базы данных, а Server на адрес вашего сервера SQL.
+
+Теперь создайте модель базы данных. Допустим, у вас есть таблица Products. В папке Models создайте класс Product.cs. Внутри него опишите свойства, которые соответствуют колонкам в базе данных: Id, Name, Price, Quantity, Category, Supplier, Discount, ImagePath и другие. Используйте атрибуты Key, Required, Column по необходимости.
+
+Создайте класс контекста базы данных. В папке Models создайте файл ApplicationDbContext.cs. Он должен наследоваться от DbContext. Внутри напишите конструктор, принимающий DbContextOptions<ApplicationDbContext>. Добавьте свойства DbSet<Product> Products, а также DbSet для других таблиц: Users, Orders, OrderDetails.
+
+В методе OnModelCreating, если требуется, опишите связи между таблицами, первичные и внешние ключи, а также настройте имена таблиц, если они отличаются от названий классов.
+
+Теперь зарегистрируйте контекст в Program.cs. Откройте этот файл. В начало добавьте using Microsoft.EntityFrameworkCore; и using YourProjectName.Models;. Внутри метода Main после строки builder.Services.AddControllersWithViews(); добавьте:
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+Также в Program.cs убедитесь, что после app.UseRouting(); и до app.UseAuthorization(); добавлена строка app.UseAuthentication(); если вы будете использовать авторизацию.
+
+Теперь сгенерируйте контроллеры и представления для таблиц. В консоли диспетчера пакетов выполните команду:
+Scaffold-DbContext "Server=.\\SQLEXPRESS;Database=ExamDB;Trusted_Connection=True;TrustServerCertificate=True;" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models -Context ApplicationDbContext -Force
+Замените параметры подключения на свои. Эта команда создаст модели и контекст на основе существующей базы данных. Если база данных ещё не создана, создайте её вручную через SQL Server Management Studio или через миграции.
+
+Для создания контроллера с представлениями используйте scaffolding через интерфейс Visual Studio. Нажмите правой кнопкой мыши на папку Controllers, выберите Добавить -> Создать шаблонный элемент -> Контроллер MVC с представлениями, использующий Entity Framework. Выберите модель Product, контекст ApplicationDbContext, укажите имя контроллера ProductsController. Нажмите добавить. Повторите для других таблиц: Users, Orders.
+
+После создания контроллеров откройте каждый из них. В методах Index, Details, Create, Edit, Delete у вас уже будет базовый код для работы с базой данных. В методах Index добавьте параметры для поиска, сортировки и фильтрации: string searchString, string sortOrder, string supplierFilter. Внутри метода формируйте запрос к DbSet, применяйте Where, OrderBy, Include по необходимости. Передавайте параметры в представление через ViewBag или ViewData.
+
+Теперь настройте авторизацию. Создайте в папке Controllers файл AccountController.cs. Внутри создайте два метода: Login (GET и POST) и Logout. В методе Login POST принимайте login и password. Ищите пользователя в базе через контекст. Если найден, создайте ClaimsIdentity и выполните SignInAsync. Перенаправьте на главную страницу. В методе Logout выполните SignOutAsync и перенаправьте на страницу входа.
+
+Создайте представление Login.cshtml в папке Views/Account. В нём создайте форму с полями для логина и пароля, метод POST. После формы выведите сообщение об ошибке из ViewBag.Error.
+
+В файле _Layout.cshtml, который находится в папке Views/Shared, добавьте в правый верхний угол отображение имени пользователя, если он авторизован. Используйте User.Identity.Name. Также добавьте кнопку выхода и ссылку на вход. Для гостевого режима добавьте ссылку "Войти как гость", которая устанавливает фейкового пользователя с ролью Guest.
+
+Для ограничения доступа по ролям добавьте атрибут [Authorize(Roles = "Admin")] над методами контроллеров, которые должны быть доступны только администратору. Для менеджера укажите Roles = "Manager,Admin". Для авторизованного клиента укажите просто [Authorize].
+
+Теперь реализуйте сортировку, фильтрацию и поиск в представлении Index для товаров. В верхней части таблицы создайте форму с method="get". Добавьте текстовое поле с name="searchString" и значением из ViewBag.CurrentSearch. Добавьте выпадающий список с name="supplierFilter", заполните его уникальными поставщиками из базы. Добавьте ссылки для сортировки: <a asp-action="Index" asp-route-sortOrder="price_asc">Цена ↑</a> и аналогично для убывания, а также для количества. Добавьте скрипт на JavaScript, который автоматически отправляет форму при изменении значений полей или выборе пункта в списке. Используйте onchange="this.form.submit()" и oninput="this.form.submit()".
+
+В методе Index контроллера обработайте эти параметры. Для поиска примените условие Contains по полям Name, Description, Manufacturer, Supplier. Для фильтрации примените Where по полю Supplier, если выбран не "Все поставщики". Для сортировки примените OrderBy или OrderByDescending в зависимости от значения sortOrder. Сохраните текущие значения параметров в ViewBag, чтобы форма отображала выбранные пользователем настройки.
+
+Для подсветки строк товаров в зависимости от скидки и остатка добавьте в представление Index внутри цикла foreach проверку условий. Если количество на складе равно нулю, добавьте к строке класс bg-info. Если скидка больше 17%, добавьте класс bg-warning или установите стиль background-color: #FFDEAD. Для отображения цены со скидкой проверьте, если скидка больше нуля, то выведите старую цену с атрибутом style="text-decoration:line-through; color:red;", а рядом итоговую цену с округлением до двух знаков.
+
+Создайте форму для добавления и редактирования товара. Для этого используйте уже сгенерированные представления Create и Edit. Добавьте в них поле для загрузки файла изображения: input type="file" name="imageFile" accept="image/*". В контроллере в методах POST Create и Edit примите параметр IFormFile imageFile. Проверьте, что файл не пустой. Сгенерируйте уникальное имя файла, например, Guid.NewGuid().ToString() + Path.GetExtension(imageFile.FileName). Сохраните файл в папку wwwroot/images, предварительно изменив размер до 300x200 пикселей. Для изменения размера используйте библиотеку System.Drawing или SixLabors.ImageSharp. Сохраните относительный путь к файлу в свойство ImagePath модели.
+
+При редактировании, если пользователь загружает новое изображение, найдите старое изображение по пути из базы и удалите его с диска с помощью File.Delete. Затем сохраните новое. При удалении товара также удалите файл изображения, если он существует.
+
+Запретите открытие двух окон редактирования одновременно. Для этого в JavaScript при клике на кнопку редактирования устанавливайте флаг, или используйте модальное окно, которое блокирует интерфейс. Проще всего использовать стандартные страницы редактирования без дополнительных окон, это автоматически ограничивает возможность открыть несколько.
+
+При удалении товара проверьте, есть ли ссылки на этот товар в других таблицах, например, в таблице заказов. Если есть, не удаляйте товар, а верните сообщение об ошибке через TempData или ViewBag. Выполните проверку через Any() в базе данных.
+
+Добавьте кнопку "Заказы" в меню для ролей Manager и Admin. В _Layout.cshtml проверьте User.IsInRole("Manager") или User.IsInRole("Admin"). Если условие верно, отобразите ссылку на OrdersController.
+
+Создайте OrdersController и представления для него аналогично ProductsController. Используйте модель Order. В представлениях выводите поля: артикул, статус, адрес пункта выдачи, дата заказа, дата выдачи. Статус сделайте выпадающим списком. Добавление, редактирование и удаление заказов разрешите только администратору через атрибут [Authorize(Roles = "Admin")].
+
+После завершения всех функций создайте документ в Word. Откройте приложение в браузере, сделайте скриншоты окна входа, списка товаров с подсветкой и скидкой, формы добавления товара, формы редактирования, работы поиска и фильтрации, списка заказов. Вставьте скриншоты в документ. Сохраните его как .docx.
+
+Подготовьте файлы для сдачи. Скрипт базы данных сгенерируйте через SQL Server Management Studio: правой кнопкой по базе -> Задачи -> Создать скрипты -> выберите все таблицы и данные. Сохраните как script.sql. Исходный код проекта скопируйте целиком, но без папок bin, obj, .vs. Исполняемые файлы находятся в папке bin/Debug/net8.0. Скопируйте их отдельно. Все графические файлы (логотип, заглушка picture.png) положите в папку wwwroot/images. Загрузите все файлы в предоставленный репозиторий. Не архивируйте, загружайте папками и файлами напрямую.
+
+Ниже приведён полный код всех файлов, которые нужно создать или изменить. Код универсальный, подходит для любой предметной области. Просто копируй и вставляй.
+
+Файл Models/Product.cs
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace ExamApp.Models
+{
+    public class Product
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [Display(Name = "Наименование")]
+        public string Name { get; set; }
+
+        [Display(Name = "Категория")]
+        public string Category { get; set; }
+
+        [Display(Name = "Описание")]
+        public string Description { get; set; }
+
+        [Display(Name = "Производитель")]
+        public string Manufacturer { get; set; }
+
+        [Display(Name = "Поставщик")]
+        public string Supplier { get; set; }
+
+        [Required]
+        [Display(Name = "Цена")]
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal Price { get; set; }
+
+        [Display(Name = "Единица измерения")]
+        public string Unit { get; set; }
+
+        [Required]
+        [Display(Name = "Количество на складе")]
+        public int Quantity { get; set; }
+
+        [Display(Name = "Скидка (%)")]
+        public decimal Discount { get; set; }
+
+        [Display(Name = "Фото")]
+        public string ImagePath { get; set; }
+    }
+}
+
+Файл Models/User.cs
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace ExamApp.Models
+{
+    [Table("Users")]
+    public class User
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        public string Login { get; set; }
+
+        [Required]
+        public string Password { get; set; }
+
+        [Display(Name = "ФИО")]
+        public string FullName { get; set; }
+
+        public string Role { get; set; }
+    }
+}
+
+Файл Models/Order.cs
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace ExamApp.Models
+{
+    public class Order
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Display(Name = "Артикул")]
+        public string ArticleNumber { get; set; }
+
+        [Display(Name = "Статус заказа")]
+        public string Status { get; set; }
+
+        [Display(Name = "Адрес пункта выдачи")]
+        public string PickupAddress { get; set; }
+
+        [Display(Name = "Дата заказа")]
+        public DateTime OrderDate { get; set; }
+
+        [Display(Name = "Дата выдачи")]
+        public DateTime? IssueDate { get; set; }
+    }
+}
+
+Файл Models/ApplicationDbContext.cs
+
+using Microsoft.EntityFrameworkCore;
+
+namespace ExamApp.Models
+{
+    public class ApplicationDbContext : DbContext
+    {
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<Product> Products { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<Order> Orders { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Product>().ToTable("Products");
+            modelBuilder.Entity<User>().ToTable("Users");
+            modelBuilder.Entity<Order>().ToTable("Orders");
+        }
+    }
+}
+
+Файл Controllers/AccountController.cs
+
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using ExamApp.Models;
+
+namespace ExamApp.Controllers
+{
+    public class AccountController : Controller
+    {
+        private readonly ApplicationDbContext _context;
+
+        public AccountController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        [HttpGet]
+        public IActionResult Login()
+        {
+            if (User.Identity.IsAuthenticated)
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Login(string login, string password)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Login == login && u.Password == password);
+
+            if (user != null)
+            {
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, user.Login),
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Role, user.Role ?? "Client"),
+                    new Claim("FullName", user.FullName ?? user.Login)
+                };
+
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity));
+
+                return RedirectToAction("Index", "Home");
+            }
+
+            ViewBag.Error = "Неверный логин или пароль";
+            return View();
+        }
+
+        public async Task<IActionResult> Logout()
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Login", "Account");
+        }
+
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult GuestLogin()
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, "Гость"),
+                new Claim(ClaimTypes.Role, "Guest")
+            };
+
+            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity));
+
+            return RedirectToAction("Index", "Home");
+        }
+    }
+}
+
+Файл Controllers/ProductsController.cs
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using ExamApp.Models;
+
+namespace ExamApp.Controllers
+{
+    public class ProductsController : Controller
+    {
+        private readonly ApplicationDbContext _context;
+        private readonly IWebHostEnvironment _webHostEnvironment;
+
+        public ProductsController(ApplicationDbContext context, IWebHostEnvironment webHostEnvironment)
+        {
+            _context = context;
+            _webHostEnvironment = webHostEnvironment;
+        }
+
+        [AllowAnonymous]
+        public async Task<IActionResult> Index(string searchString, string sortOrder, string supplierFilter)
+        {
+            var products = _context.Products.AsQueryable();
+
+            if (!string.IsNullOrEmpty(searchString))
+            {
+                products = products.Where(p =>
+                    p.Name.Contains(searchString) ||
+                    (p.Description != null && p.Description.Contains(searchString)) ||
+                    (p.Manufacturer != null && p.Manufacturer.Contains(searchString)) ||
+                    (p.Supplier != null && p.Supplier.Contains(searchString)));
+            }
+
+            if (!string.IsNullOrEmpty(supplierFilter) && supplierFilter != "Все поставщики")
+            {
+                products = products.Where(p => p.Supplier == supplierFilter);
+            }
+
+            ViewBag.PriceSort = sortOrder == "price_asc" ? "price_desc" : "price_asc";
+            ViewBag.QuantitySort = sortOrder == "qty_asc" ? "qty_desc" : "qty_asc";
+            ViewBag.CurrentSearch = searchString;
+            ViewBag.CurrentSupplier = supplierFilter;
+            ViewBag.CurrentSort = sortOrder;
+
+            switch (sortOrder)
+            {
+                case "price_asc":
+                    products = products.OrderBy(p => p.Price);
+                    break;
+                case "price_desc":
+                    products = products.OrderByDescending(p => p.Price);
+                    break;
+                case "qty_asc":
+                    products = products.OrderBy(p => p.Quantity);
+                    break;
+                case "qty_desc":
+                    products = products.OrderByDescending(p => p.Quantity);
+                    break;
+                default:
+                    products = products.OrderBy(p => p.Id);
+                    break;
+            }
+
+            var suppliers = await _context.Products.Select(p => p.Supplier).Distinct().ToListAsync();
+            ViewBag.Suppliers = new SelectList(suppliers);
+
+            return View(await products.ToListAsync());
+        }
+
+        [Authorize(Roles = "Admin")]
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(Product product, IFormFile imageFile)
+        {
+            if (ModelState.IsValid)
+            {
+                if (imageFile != null)
+                {
+                    product.ImagePath = await SaveImage(imageFile);
+                }
+
+                _context.Add(product);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            return View(product);
+        }
+
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null) return NotFound();
+            var product = await _context.Products.FindAsync(id);
+            if (product == null) return NotFound();
+            return View(product);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, Product product, IFormFile imageFile)
+        {
+            if (id != product.Id) return NotFound();
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    var existingProduct = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+                    if (existingProduct == null) return NotFound();
+
+                    if (imageFile != null)
+                    {
+                        if (!string.IsNullOrEmpty(existingProduct.ImagePath))
+                        {
+                            DeleteImage(existingProduct.ImagePath);
+                        }
+                        product.ImagePath = await SaveImage(imageFile);
+                    }
+                    else
+                    {
+                        product.ImagePath = existingProduct.ImagePath;
+                    }
+
+                    _context.Update(product);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!ProductExists(id)) return NotFound();
+                    throw;
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(product);
+        }
+
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null) return NotFound();
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
+            if (product == null) return NotFound();
+            return View(product);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product != null)
+            {
+                bool inUse = await _context.Orders.AnyAsync(o => o.ArticleNumber == product.Id.ToString());
+                if (inUse)
+                {
+                    TempData["Error"] = "Нельзя удалить товар, который используется в заказах.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (!string.IsNullOrEmpty(product.ImagePath))
+                {
+                    DeleteImage(product.ImagePath);
+                }
+
+                _context.Products.Remove(product);
+                await _context.SaveChangesAsync();
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool ProductExists(int id)
+        {
+            return _context.Products.Any(e => e.Id == id);
+        }
+
+        private async Task<string> SaveImage(IFormFile imageFile)
+        {
+            string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "images");
+            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+            string uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(imageFile.FileName);
+            string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                await imageFile.CopyToAsync(fileStream);
+            }
+
+            return "/images/" + uniqueFileName;
+        }
+
+        private void DeleteImage(string imagePath)
+        {
+            string fullPath = Path.Combine(_webHostEnvironment.WebRootPath, imagePath.TrimStart('/'));
+            if (System.IO.File.Exists(fullPath))
+            {
+                System.IO.File.Delete(fullPath);
+            }
+        }
+    }
+}
+
+Файл Controllers/OrdersController.cs
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ExamApp.Models;
+
+namespace ExamApp.Controllers
+{
+    [Authorize(Roles = "Manager,Admin")]
+    public class OrdersController : Controller
+    {
+        private readonly ApplicationDbContext _context;
+
+        public OrdersController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<IActionResult> Index()
+        {
+            return View(await _context.Orders.ToListAsync());
+        }
+
+        [Authorize(Roles = "Admin")]
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(Order order)
+        {
+            if (ModelState.IsValid)
+            {
+                _context.Add(order);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            return View(order);
+        }
+
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null) return NotFound();
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null) return NotFound();
+            return View(order);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, Order order)
+        {
+            if (id != order.Id) return NotFound();
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(order);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!OrderExists(order.Id)) return NotFound();
+                    throw;
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(order);
+        }
+
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null) return NotFound();
+            var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
+            if (order == null) return NotFound();
+            return View(order);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            var order = await _context.Orders.FindAsync(id);
+            if (order != null)
+            {
+                _context.Orders.Remove(order);
+                await _context.SaveChangesAsync();
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool OrderExists(int id)
+        {
+            return _context.Orders.Any(e => e.Id == id);
+        }
+    }
+}
+
+Файл Controllers/HomeController.cs
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace ExamApp.Controllers
+{
+    [Authorize]
+    public class HomeController : Controller
+    {
+        public IActionResult Index()
+        {
+            string userName = User.FindFirst("FullName")?.Value ?? User.Identity.Name;
+            ViewBag.UserName = userName;
+            ViewBag.UserRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            return View();
+        }
+
+        [AllowAnonymous]
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
+    }
+}
+
+Файл Program.cs
+
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
+using ExamApp.Models;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllersWithViews();
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Home/AccessDenied";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+    });
+
+var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.Run();
+
+Файл appsettings.json
+
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=.\\SQLEXPRESS;Database=ExamDB;Trusted_Connection=True;TrustServerCertificate=True;"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+
+Файл Views/Account/Login.cshtml
+
+@{
+    ViewData["Title"] = "Авторизация";
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3>Вход в систему</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="form-group mb-3">
+                            <label>Логин</label>
+                            <input type="text" name="login" class="form-control" required autofocus />
+                        </div>
+                        <div class="form-group mb-3">
+                            <label>Пароль</label>
+                            <input type="password" name="password" class="form-control" required />
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Войти</button>
+                    </form>
+
+                    <form method="post" asp-action="GuestLogin" class="mt-2">
+                        <button type="submit" class="btn btn-secondary w-100">Продолжить как гость</button>
+                    </form>
+
+                    @if (ViewBag.Error != null)
+                    {
+                        <div class="alert alert-danger mt-3">@ViewBag.Error</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+Файл Views/Products/Index.cshtml
+
+@model IEnumerable<ExamApp.Models.Product>
+
+@{
+    ViewData["Title"] = "Товары";
+    var isAdmin = User.IsInRole("Admin");
+    var isManager = User.IsInRole("Manager");
+    var canManage = isAdmin || isManager;
+}
+
+<h1>Товары</h1>
+
+@if (isAdmin)
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Добавить товар</a>
+    </p>
+}
+
+<form method="get" asp-action="Index" class="row g-3 mb-3">
+    <div class="col-md-4">
+        <input type="text" name="searchString" class="form-control" placeholder="Поиск..." value="@ViewBag.CurrentSearch" oninput="this.form.submit()" />
+    </div>
+    <div class="col-md-3">
+        <select name="supplierFilter" class="form-select" onchange="this.form.submit()">
+            <option value="Все поставщики">Все поставщики</option>
+            @foreach (var s in ViewBag.Suppliers)
+            {
+                <option value="@s" selected="@(ViewBag.CurrentSupplier == s)">@s</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <a asp-action="Index" asp-route-sortOrder="@ViewBag.PriceSort" asp-route-searchString="@ViewBag.CurrentSearch" asp-route-supplierFilter="@ViewBag.CurrentSupplier" class="btn btn-outline-secondary">Сортировать по цене</a>
+        <a asp-action="Index" asp-route-sortOrder="@ViewBag.QuantitySort" asp-route-searchString="@ViewBag.CurrentSearch" asp-route-supplierFilter="@ViewBag.CurrentSupplier" class="btn btn-outline-secondary">Сортировать по количеству</a>
+    </div>
+</form>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Фото</th>
+            <th>Наименование</th>
+            <th>Категория</th>
+            <th>Производитель</th>
+            <th>Поставщик</th>
+            <th>Цена</th>
+            <th>Ед.изм</th>
+            <th>Кол-во</th>
+            <th>Скидка</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            string rowClass = "";
+            if (item.Quantity == 0) rowClass = "table-info";
+            else if (item.Discount > 17) rowClass = "table-warning";
+
+            <tr class="@rowClass">
+                <td>
+                    @if (!string.IsNullOrEmpty(item.ImagePath) && System.IO.File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", item.ImagePath.TrimStart('/'))))
+                    {
+                        <img src="@item.ImagePath" alt="@item.Name" style="width:60px; height:60px; object-fit:cover;" />
+                    }
+                    else
+                    {
+                        <img src="/images/picture.png" alt="Нет фото" style="width:60px; height:60px; object-fit:cover;" />
+                    }
+                </td>
+                <td>@item.Name</td>
+                <td>@item.Category</td>
+                <td>@item.Manufacturer</td>
+                <td>@item.Supplier</td>
+                <td>
+                    @if (item.Discount > 0)
+                    {
+                        <span style="text-decoration:line-through; color:red;">@item.Price.ToString("F2")</span>
+                        <span> → @((item.Price * (1 - item.Discount / 100)).ToString("F2"))</span>
+                    }
+                    else
+                    {
+                        <span>@item.Price.ToString("F2")</span>
+                    }
+                </td>
+                <td>@item.Unit</td>
+                <td>@item.Quantity</td>
+                <td>@item.Discount%</td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-info">Детали</a>
+                    @if (canManage)
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Изменить</a>
+                    }
+                    @if (isAdmin)
+                    {
+                        <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Удалить</a>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+Файл Views/Products/Create.cshtml
+
+@model ExamApp.Models.Product
+
+@{
+    ViewData["Title"] = "Добавление товара";
+}
+
+<h1>Добавить товар</h1>
+
+<form asp-action="Create" method="post" enctype="multipart/form-data">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" required />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Category" class="control-label"></label>
+                <input asp-for="Category" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Description" class="control-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Manufacturer" class="control-label"></label>
+                <input asp-for="Manufacturer" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Supplier" class="control-label"></label>
+                <input asp-for="Supplier" class="form-control" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label asp-for="Price" class="control-label"></label>
+                <input asp-for="Price" class="form-control" step="0.01" required />
+                <span asp-validation-for="Price" class="text-danger"></span>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Unit" class="control-label"></label>
+                <input asp-for="Unit" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Quantity" class="control-label"></label>
+                <input asp-for="Quantity" class="form-control" required />
+                <span asp-validation-for="Quantity" class="text-danger"></span>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Discount" class="control-label"></label>
+                <input asp-for="Discount" class="form-control" step="0.01" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label>Фото товара</label>
+                <input type="file" name="imageFile" class="form-control" accept="image/*" />
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a asp-action="Index" class="btn btn-secondary">Назад</a>
+    </div>
+</form>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+
+Файл Views/Products/Edit.cshtml
+
+@model ExamApp.Models.Product
+
+@{
+    ViewData["Title"] = "Редактирование товара";
+}
+
+<h1>Редактировать товар</h1>
+
+<form asp-action="Edit" method="post" enctype="multipart/form-data">
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="ImagePath" />
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Category" class="control-label"></label>
+                <input asp-for="Category" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Description" class="control-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Manufacturer" class="control-label"></label>
+                <input asp-for="Manufacturer" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Supplier" class="control-label"></label>
+                <input asp-for="Supplier" class="form-control" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label asp-for="Price" class="control-label"></label>
+                <input asp-for="Price" class="form-control" step="0.01" required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Unit" class="control-label"></label>
+                <input asp-for="Unit" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Quantity" class="control-label"></label>
+                <input asp-for="Quantity" class="form-control" required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Discount" class="control-label"></label>
+                <input asp-for="Discount" class="form-control" step="0.01" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label>Фото товара</label>
+                @if (!string.IsNullOrEmpty(Model.ImagePath))
+                {
+                    <div class="mb-2">
+                        <img src="@Model.ImagePath" alt="Текущее фото" style="width:100px;" />
+                    </div>
+                }
+                <input type="file" name="imageFile" class="form-control" accept="image/*" />
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a asp-action="Index" class="btn btn-secondary">Назад</a>
+    </div>
+</form>
+
+Файл Views/Products/Delete.cshtml
+
+@model ExamApp.Models.Product
+
+@{
+    ViewData["Title"] = "Удаление товара";
+}
+
+<h1>Удалить товар</h1>
+
+<div class="alert alert-danger">
+    <h3>Вы уверены, что хотите удалить этот товар?</h3>
+</div>
+
+<div>
+    <dl class="row">
+        <dt class="col-sm-2">Наименование</dt>
+        <dd class="col-sm-10">@Model.Name</dd>
+
+        <dt class="col-sm-2">Категория</dt>
+        <dd class="col-sm-10">@Model.Category</dd>
+
+        <dt class="col-sm-2">Цена</dt>
+        <dd class="col-sm-10">@Model.Price</dd>
+
+        <dt class="col-sm-2">Количество</dt>
+        <dd class="col-sm-10">@Model.Quantity</dd>
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <button type="submit" class="btn btn-danger">Удалить</button>
+        <a asp-action="Index" class="btn btn-secondary">Назад</a>
+    </form>
+</div>
+
+Файл Views/Orders/Index.cshtml
+
+@model IEnumerable<ExamApp.Models.Order>
+
+@{
+    ViewData["Title"] = "Заказы";
+    var isAdmin = User.IsInRole("Admin");
+}
+
+<h1>Заказы</h1>
+
+@if (isAdmin)
+{
+    <p>
+        <a asp-action="Create" class="btn btn-primary">Добавить заказ</a>
+    </p>
+}
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Артикул</th>
+            <th>Статус</th>
+            <th>Адрес пункта выдачи</th>
+            <th>Дата заказа</th>
+            <th>Дата выдачи</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.ArticleNumber</td>
+                <td>@item.Status</td>
+                <td>@item.PickupAddress</td>
+                <td>@item.OrderDate.ToShortDateString()</td>
+                <td>@(item.IssueDate?.ToShortDateString() ?? "—")</td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-info">Детали</a>
+                    @if (isAdmin)
+                    {
+                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Изменить</a>
+                        <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Удалить</a>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+Файл Views/Orders/Create.cshtml
+
+@model ExamApp.Models.Order
+
+@{
+    ViewData["Title"] = "Добавление заказа";
+}
+
+<h1>Добавить заказ</h1>
+
+<form asp-action="Create" method="post">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label asp-for="ArticleNumber" class="control-label"></label>
+                <input asp-for="ArticleNumber" class="form-control" required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Status" class="control-label"></label>
+                <select asp-for="Status" class="form-select">
+                    <option value="Новый">Новый</option>
+                    <option value="В обработке">В обработке</option>
+                    <option value="Выдан">Выдан</option>
+                    <option value="Отменён">Отменён</option>
+                </select>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="PickupAddress" class="control-label"></label>
+                <input asp-for="PickupAddress" class="form-control" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="OrderDate" class="control-label"></label>
+                <input asp-for="OrderDate" class="form-control" type="date" required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="IssueDate" class="control-label"></label>
+                <input asp-for="IssueDate" class="form-control" type="date" />
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a asp-action="Index" class="btn btn-secondary">Назад</a>
+    </div>
+</form>
+
+Файл Views/Shared/_Layout.cshtml (только изменённая часть с навигацией и именем пользователя)
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ExamApp</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">ExamApp</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-controller="Home" asp-action="Index">Главная</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-controller="Products" asp-action="Index">Товары</a>
+                        </li>
+                        @if (User.IsInRole("Manager") || User.IsInRole("Admin"))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Orders" asp-action="Index">Заказы</a>
+                            </li>
+                        }
+                    </ul>
+                    <ul class="navbar-nav">
+                        @if (User.Identity.IsAuthenticated)
+                        {
+                            <li class="nav-item">
+                                <span class="navbar-text text-success">
+                                    👤 @(User.FindFirst("FullName")?.Value ?? User.Identity.Name)
+                                </span>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-danger" asp-controller="Account" asp-action="Logout">Выход</a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-primary" asp-controller="Account" asp-action="Login">Вход</a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <main role="main" class="pb-3">
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger">@TempData["Error"]</div>
+            }
+            @RenderBody()
+        </main>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+
+Файл Views/Home/Index.cshtml
+
+@{
+    ViewData["Title"] = "Главная страница";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Добро пожаловать</h1>
+    
+    @if (User.Identity.IsAuthenticated)
+    {
+        <p>Вы вошли как: <strong>@ViewBag.UserName</strong></p>
+        <p>Роль: <strong>@ViewBag.UserRole</strong></p>
+    }
+    else
+    {
+        <p>Вы в режиме гостя</p>
+    }
+
+    <div class="mt-4">
+        <a asp-controller="Products" asp-action="Index" class="btn btn-primary">Перейти к товарам</a>
+    </div>
+</div>
+
+Файл Views/Home/AccessDenied.cshtml
+
+@{
+    ViewData["Title"] = "Доступ запрещён";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Доступ запрещён</h1>
+    <p>У вас нет прав для просмотра этой страницы.</p>
+    <a asp-controller="Home" asp-action="Index" class="btn btn-primary">Вернуться на главную</a>
+</div>
+
+После создания всех файлов выполните в консоли диспетчера пакетов команду Add-Migration InitialCreate, затем Update-Database. Скопируйте папку wwwroot/images с картинкой-заглушкой picture.png. Запустите приложение. Готово.
